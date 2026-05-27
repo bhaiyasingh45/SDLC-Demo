@@ -1,0 +1,20 @@
+app:
+  name: taskflow-api
+  version: "1.0.0"
+  debug: false
+  port: 5000
+
+notification:
+  webhook_url: "http://localhost:9000/notify"
+  # ⚠️ Bug #4: timeout is declared here (1 second) but the notification
+  #   client never reads it when calling requests.post().
+  timeout: 1
+  max_retries: 3
+
+database:
+  # In-memory for workshop — swap for a real DB in production
+  type: in_memory
+
+logging:
+  level: INFO
+  format: "%(asctime)s %(levelname)-8s %(name)s — %(message)s"
