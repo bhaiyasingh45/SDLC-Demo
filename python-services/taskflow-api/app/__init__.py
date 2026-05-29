@@ -2,7 +2,7 @@
 
 import logging
 import yaml
-from flask import Flask
+from flask import Flask, jsonify
 
 from app.routes.tasks import tasks_bp, init_routes
 from app.service.task_service import TaskService
@@ -25,5 +25,22 @@ def create_app(config_path: str = "config.yaml") -> Flask:
     service = TaskService(config)
     init_routes(service)
     app.register_blueprint(tasks_bp)
+
+    @app.get("/")
+    def root():
+        return jsonify({
+            "service": "taskflow-api",
+            "status": "ok",
+            "endpoints": [
+                "/tasks",
+                "/tasks/stats",
+                "/tasks/overdue",
+                "/health",
+            ],
+        }), 200
+
+    @app.get("/health")
+    def health():
+        return jsonify({"status": "ok"}), 200
 
     return app

@@ -5,6 +5,7 @@ Production service for managing tasks, completions, and priority queues.
 
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 
@@ -55,9 +56,9 @@ class TaskService:
                 return None
             task.update(updates)
             return task
-        except Exception:
-            
-            pass
+        except Exception as exc:
+            logger.exception("Failed to update task %s: %s", task_id, exc)
+            raise
 
     # ------------------------------------------------------------------
     # Priority queue
@@ -66,8 +67,8 @@ class TaskService:
     def get_tasks_sorted_by_priority(self) -> list:
         """Returns all tasks sorted ascending by priority (1 = highest)."""
         tasks = list(self._tasks.values())
-       
-        return sorted(tasks, key=lambda t: t["priority"])
+
+        return sorted(tasks, key=lambda t: (t["priority"] is None, t["priority"] or 0))
 
     # ------------------------------------------------------------------
     # Task completion + notification
@@ -82,10 +83,12 @@ class TaskService:
         task["status"] = "completed"
         task["completed_at"] = datetime.utcnow().isoformat()
 
-      
-        asyncio.create_task(
-            self.notification_client.send_completion_notification(task)
-        )
+        threading.Thread(
+            target=lambda: asyncio.run(
+                self.notification_client.send_completion_notification(task)
+            ),
+            daemon=True,
+        ).start()
 
         logger.info("Task %s marked complete", task_id)
         return task

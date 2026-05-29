@@ -36,7 +36,10 @@ def create_task():
 
    
     due_date_str = data.get("due_date", "")
-    due_date = datetime.strptime(due_date_str, "%Y-%m-%d")  
+    try:
+        due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return jsonify({"error": "due_date must be in YYYY-MM-DD format"}), 400
 
     task = _task_service.create_task(
         title=data["title"],
@@ -97,7 +100,7 @@ def update_task(task_id: int):
     task = _task_service.update_task(task_id, data)
 
     if task is None:
-        return jsonify({"error": "Task not found or update failed"}), 404
+        return jsonify({"error": "Task not found"}), 404
     return jsonify(task), 200
 
 

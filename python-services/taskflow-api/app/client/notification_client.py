@@ -3,6 +3,7 @@ TaskFlow API — Notification Client
 Sends webhook notifications when tasks are completed.
 """
 
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -32,16 +33,33 @@ class NotificationClient:
             "completed_at": task.get("completed_at"),
         }
 
-        
-        try:
-            response = requests.post(self.webhook_url, json=payload)
-            response.raise_for_status()
-            logger.info("Notification sent for task %s", task["id"])
-            return response.json()
-        except requests.exceptions.ConnectionError as exc:
-           
-            logger.error("Failed to send notification for task %s", task["id"])
-            return None
+        for attempt in range(self.max_retries):
+            try:
+                response = requests.post(
+                    self.webhook_url, json=payload, timeout=self.timeout
+                )
+                response.raise_for_status()
+                logger.info("Notification sent for task %s", task["id"])
+                return response.json()
+            except requests.exceptions.ConnectionError as exc:
+                if attempt < self.max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "Retrying notification for task %s (attempt %d/%d, wait=%ds): %s",
+                        task["id"], attempt + 1, self.max_retries, wait, exc,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    logger.exception(
+                        "Notification permanently failed for task %s after %d retries",
+                        task["id"], self.max_retries,
+                    )
+                    return None
+            except requests.exceptions.RequestException as exc:
+                logger.exception("Notification failed for task %s: %s", task["id"], exc)
+                return None
+
+        return None
 
     def send_batch_notifications(self, tasks: list) -> list:
         """Send notifications for a list of tasks (sync wrapper)."""
@@ -53,12 +71,12 @@ class NotificationClient:
                 response = requests.post(
                     self.webhook_url,
                     json={"event": "task.batch", "task": task},
-                    
+                    timeout=self.timeout,
                 )
                 response.raise_for_status()
                 results.append({"task_id": task["id"], "status": "sent"})
             except requests.exceptions.RequestException as exc:
-                logger.error("Batch notification failed for task %s: %s",
-                             task.get("id"), exc)
+                logger.exception("Batch notification failed for task %s: %s",
+                                 task.get("id"), exc)
                 results.append({"task_id": task.get("id"), "status": "failed"})
         return results
